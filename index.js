@@ -9,7 +9,7 @@ app.listen(port, (res) => {
 
 const handler = serverless(app);
 
-module.exports = { handler };
+module.exports = handler ;
   
 
 
