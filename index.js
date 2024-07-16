@@ -7,7 +7,9 @@ app.listen(port, (res) => {
     console.log("App is connected", port);
 });
 
-module.exports.handler = serverless(app);
+const handler = serverless(app);
+
+module.exports = { handler };
   
 
 
