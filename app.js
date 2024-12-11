@@ -8,9 +8,6 @@ require("dotenv").config();
 const corsOptions = {
   origin: ['http://localhost:4200', 'https://skah-in.web.app'], // Allowed origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
-  credentials: true,
-  optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions))
 
@@ -25,5 +22,10 @@ app.use((err, req, res, next) => {
     res.status(500).send('Something broke!');
   });
   
+
+  app.use((req, res, next) => {
+    console.log(`Request received: ${req.method} ${req.url}`);
+    next();
+  });
 
 module.exports = app;
