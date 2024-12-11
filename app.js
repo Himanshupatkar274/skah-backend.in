@@ -6,7 +6,7 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config(); 
 const corsOptions = {
-  origin: 'http://localhost:4200', // Replace with your Angular app's URL
+  origin: ['http://localhost:4200', 'https://skah-in.web.app/'], // Replace with your Angular app's URL
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions))
