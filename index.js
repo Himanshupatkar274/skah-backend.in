@@ -1,5 +1,4 @@
 const app = require('./app');
-const server = require('http').createServer(app);
 const serverless = require('serverless-http');
 require("dotenv").config();
 
