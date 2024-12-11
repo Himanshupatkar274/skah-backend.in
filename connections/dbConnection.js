@@ -7,7 +7,7 @@ function getClient() {
     host: 'localhost',
     database: 'NewTestDB',
     password: 'Himanshu@123',
-    port: process.env.PORT,
+    port: process.env.DBPORT,
   });
 
   // Connect to the database

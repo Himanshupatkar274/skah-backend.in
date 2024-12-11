@@ -3,8 +3,13 @@ const routes = require("./route/user.router");
 const bodyParser = require("body-parser");
 const path = require("path");
 const app = express();
-
+const cors = require("cors");
 require("dotenv").config(); 
+const corsOptions = {
+  origin: 'http://localhost:4200', // Replace with your Angular app's URL
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions))
 
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
