@@ -6,6 +6,8 @@ const ApiResponse = require("../utils/apiResponse");
 const httpStatus = require("http-status");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const tokenService = require("../services/tokenService");
+const type = require("../config/tokentype");
 
 const add_productItem = catchAsync(async (req, res, next) => {
   try {
@@ -27,7 +29,6 @@ const add_productItem = catchAsync(async (req, res, next) => {
     const result = await client.query(insertQuery);
     ApiResponse(res, httpStatus.OK, true, "product add successfully");
   } catch (error) {
-    console.log("error", error);
   }
 });
 
@@ -97,7 +98,6 @@ const addToCart = catchAsync(async (req, res, next) => {
       result.rows
     );
   } catch (error) {
-    console.log(error);
     ApiResponse(res, httpStatus.OK, false, "Item added faild", error.message);
   }
 });
@@ -135,19 +135,12 @@ const removeCartItem = catchAsync(async (req, res, next) => {
 
 const joinUser = catchAsync(async (req, res, next) => {
   try {
-    const { email, password, fullName, mobile } = req.body;
-    const emailCheckResult = await client.query(
-      `SELECT * FROM users WHERE username = '${email}';`
-    );
-
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(req.body.password, salt);
 
-    // Generate a dynamic secret key
-    const crypto = require("crypto");
-    const secretKey = crypto.randomBytes(32).toString("base64");
-    const token = jwt.sign({ email: email }, secretKey);
-
+    const emailCheckResult = await client.query(
+      `SELECT * FROM users WHERE username = '${req.body.email}';`
+    );
     if (emailCheckResult.rows.length > 0) {
       return ApiResponse(
         res,
@@ -157,9 +150,20 @@ const joinUser = catchAsync(async (req, res, next) => {
         []
       );
     }
-    const insertQuery = `INSERT INTO users (username, password, full_name, mobile) VALUES ('${email}', '${hashedPassword}', '${fullName}', '${mobile}') RETURNING *;`;
+    const insertQuery = `INSERT INTO users (username, password, full_name, mobile) VALUES ('${req.body.email}', '${hashedPassword}', '${req.body.fullName}', '${req.body.mobile}') RETURNING *;`;
     const result = await client.query(insertQuery);
-    ApiResponse(res, httpStatus.OK, true, "User created successfully", result.rows);
+    if (result.rows) {
+      const memberData = {
+        email: req.body.email,
+        password: hashedPassword,
+        fullName: req.body.fullName,
+        mobile: req.body.mobile,
+        userId: result.rows[0].user_id
+      };
+      const Token = await tokenService.generateUserTokens(memberData)
+      res.status(httpStatus.OK).send({ success: true, message: "User created successfully", data: result.data[0], Token })
+    }
+
   } catch (error) {
     return ApiResponse(
       res,
@@ -178,34 +182,20 @@ const loginUser = catchAsync(async (req, res, next) => {
       `SELECT * FROM users WHERE username = '${email}';`
     );
     if (user.rows.length === 0) {
-      return ApiResponse(
-        res,
-        httpStatus.NOT_FOUND,
-        false,
-        "User not found",
-        []
-      );
+      return ApiResponse(res, httpStatus.NOT_FOUND, false, "User not found", []);
     }
 
     const hashedPassword = user.rows[0].password;
     const passwordMatch = await bcrypt.compare(password, hashedPassword);
 
     if (passwordMatch) {
-      const crypto = require("crypto");
-      const secretKey = crypto.randomBytes(32).toString("base64");
-      const token = jwt.sign({ email: email }, secretKey);
-      return ApiResponse(res, httpStatus.OK, true, "User Login successfully", {
-        user: user.rows[0],
-        token: token,
-      });
+      const userData = {
+        userId: user.rows[0].user_id
+      }
+      const token = await tokenService.generateUserTokens(userData);
+      return res.status(httpStatus.OK).send({ success: true, message: "User Login successfully", data: user.rows[0] , token })
     } else {
-      return ApiResponse(
-        res,
-        httpStatus.UNAUTHORIZED,
-        false,
-        "Incorrect password",
-        []
-      );
+      return ApiResponse(res, httpStatus.UNAUTHORIZED, false, "Incorrect password", []);
     }
   } catch (error) {
     return ApiResponse(res, httpStatus.BAD_REQUEST, false, error.message, []);
@@ -214,7 +204,8 @@ const loginUser = catchAsync(async (req, res, next) => {
 
 const addAddress = catchAsync(async (req, res, next) => {
   try {
-    const { userId, address, state, city, zipcode, mobileNumber, name } = req.body;
+    const { userId, address, state, city, zipcode, mobileNumber, name } =
+      req.body;
     const addAddress = `
       INSERT INTO user_addresses (user_id, address, state, city, zipcode, mobile_number, name)
       VALUES ($1,$2,$3,$4,$5,$6,$7);`;
@@ -222,7 +213,6 @@ const addAddress = catchAsync(async (req, res, next) => {
     const result = await client.query(addAddress, values);
     ApiResponse(res, httpStatus.OK, true, "Address added successfully", []);
   } catch (error) {
-    console.log(error);
     ApiResponse(
       res,
       httpStatus.OK,
@@ -237,34 +227,97 @@ const getAddress = catchAsync(async (req, res, next) => {
   try {
     const userId = req.params.userId;
     if (!userId) {
-      return ApiResponse(res,httpStatus.BAD_REQUEST,false, "User ID is required");
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "User ID is required"
+      );
     }
     const getAddress = `SELECT * FROM user_addresses WHERE user_id = ${userId}`;
     const result = await client.query(getAddress);
-    console.log(result.rows);
-
     ApiResponse(res, httpStatus.OK, true, "Item get successfully", result.rows);
   } catch (error) {
     ApiResponse(res, httpStatus.OK, false, error.message);
   }
 });
 
-const updateShippingAddress = catchAsync(async (req, res, next) =>{
+const updateShippingAddress = catchAsync(async (req, res, next) => {
   try {
-    const { userId, address} = req.body;
+    const { userId, address } = req.body;
     if (!userId) {
-      return ApiResponse(res,httpStatus.BAD_REQUEST,false, "User ID is required");
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "User ID is required"
+      );
     }
     const updateAddress = `UPDATE user_addresses SET ship_address=$1 WHERE user_id = $2`;
     const values = [address, userId];
     const result = await client.query(updateAddress, values);
-    console.log(result.rows);
 
-    ApiResponse(res, httpStatus.OK, true, "Address set successfully", result.rows);
+    ApiResponse(
+      res,
+      httpStatus.OK,
+      true,
+      "Address set successfully",
+      result.rows
+    );
   } catch (error) {
     ApiResponse(res, httpStatus.OK, false, error.message);
   }
-})
+});
+
+const updateOrderStatus = catchAsync(async (req, res, next) => {
+  try {
+    const { orderId, status } = req.body;
+    if (!orderId) {
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "orderId is required"
+      );
+    }
+    const query = `UPDATE user_orders SET status = $1 WHERE order_id = $2 RETURNING *;`;
+    const values = [status, orderId];
+    const result = await client.query(query, values);
+    if (result.rows.length === 0) {
+      return ApiResponse(res, httpStatus.NOT_FOUND, false, "Order not found");
+    }
+    ApiResponse(
+      res,
+      httpStatus.OK,
+      true,
+      "order status update successfully",
+      []
+    );
+  } catch (error) {
+    ApiResponse(res, httpStatus.OK, false, error.message);
+  }
+});
+
+const removeOrderFromCart = catchAsync(async (req, res, next) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "User id os required",
+        []
+      );
+    }
+    const query = `DELETE FROM cartitem WHERE user_id = $1`;
+    const values = [userId];
+    const result = await client.query(query, values);
+    ApiResponse(res, httpStatus.OK, true, "Cart remove successfully", []);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.OK, false, error.message, []);
+  }
+});
 
 module.exports = {
   add_productItem,
@@ -275,6 +328,9 @@ module.exports = {
   joinUser,
   loginUser,
   getCartData,
-  addAddress, updateShippingAddress,
-  getAddress
+  updateOrderStatus,
+  removeOrderFromCart,
+  addAddress,
+  updateShippingAddress,
+  getAddress,
 };

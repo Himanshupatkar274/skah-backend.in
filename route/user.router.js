@@ -4,21 +4,26 @@ const router = express.Router();
 const userController = require('../controller/user.controller');
 const paymentController = require('../middlewares/payment');
 const {upload} = require('../middlewares/multer');
+const { authentication } = require('../middlewares/authentication');
 // Define user routes
 
 router.post('/addProductItem', upload.single('image'), userController.add_productItem)
-router.get('/getAllProducts' , userController.getAllProducts)
-router.get('/getproductById/:id', userController.getproductById)
-router.post('/addToCart', userController.addToCart)
-router.post('/removeCartItem/:id', userController.removeCartItem)
-router.post('/joinUser', userController.joinUser)
+router.get('/getAllProducts' , authentication(), userController.getAllProducts)
+router.get('/getproductById/:id', authentication(), userController.getproductById)
+router.post('/addToCart', authentication(), userController.addToCart)
+router.post('/removeCartItem/:id', authentication(), userController.removeCartItem)
+router.post('/joinUser', authentication(), userController.joinUser)
 router.post('/loginUser', userController.loginUser)
-router.post('/removeCartItem', userController.removeCartItem)
-router.post('/addAddress', userController.addAddress)
-router.get('/getAddress/:userId', userController.getAddress)
-router.get('/getCartData/:userId', userController.getCartData)
-router.post('/createOrder', paymentController.createOrder)
-router.post('/updateShippingAddress', userController.updateShippingAddress)
-router.post('/paymentVerify', paymentController.verifyPayment)
+router.post('/removeCartItem', authentication(), userController.removeCartItem)
+router.post('/addAddress', authentication(), userController.addAddress)
+router.get('/getAddress/:userId', authentication(), userController.getAddress)
+router.get('/getCartData/:userId', authentication(), userController.getCartData)
+router.post('/createOrder', authentication(), paymentController.createOrder)
+router.post('/updateShippingAddress', authentication(), userController.updateShippingAddress)
+router.post('/paymentVerify', authentication(), paymentController.verifyPayment)
+router.post('/getOrderHistory', authentication(), paymentController.getOrderHistory)
+router.post('/getTransactionHistory', authentication(), paymentController.getTransactionHistory)
+router.post('/updateOrderStatus', authentication(), userController.updateOrderStatus)
+router.post('/removeOrderFromCart', authentication(), userController.removeOrderFromCart)
 
 module.exports = router;

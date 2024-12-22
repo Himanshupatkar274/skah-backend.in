@@ -1,5 +1,7 @@
+const catchAsync = require("../utils/catchAsync");
 const Razorpay = require("razorpay");
 const ApiResponse = require("../utils/apiResponse");
+const userModel = require("../models/userModel")
 const httpStatus = require("http-status");
 
 var razorpay = new Razorpay({
@@ -15,7 +17,7 @@ var razorpay = new Razorpay({
 
 const createOrder = async (req, res) => {
   try {
-    const { amount } = req.body; // Amount from the frontend
+    const { amount, userId } = req.body; // Amount from the frontend
     if (!amount) {
         return ApiResponse(res, httpStatus.BAD_REQUEST, false, 'Amount is required');
     }
@@ -25,9 +27,9 @@ const createOrder = async (req, res) => {
       currency: "INR",
       receipt: `receipt_${new Date().getTime()}`,
     });
+    await userModel.saveOrderDetails(order, userId)
     ApiResponse(res, httpStatus.OK, true, "Order create successfully", order);
   } catch (error) {
-    console.error("Razorpay Error:", error);
     // If it's a Razorpay error, handle it
     if (error.response) {
       return res.status(500).json({
@@ -69,8 +71,37 @@ const verifyPayment = (req, res) => {
   }
 };
 
+const getTransactionHistory = catchAsync(async (req, res, next) =>{
+  try {
+    const paymentId = req.body.paymentId;
+    const payment = await razorpay.payments.fetch(paymentId);
+    ApiResponse(res, httpStatus.OK, true, "Transaction get successfully", [payment]);
+  } catch (error) {
+    res.status(500).send("Internal Server Error");
+  }
+})
+
+const getOrderHistory = catchAsync(async (req, res, next) =>{
+  try {
+    const orderId = req.body.orderId;
+    const order = await razorpay.orders.fetch(orderId);
+    ApiResponse(res, httpStatus.OK, true, "Order get successfully", [order]);
+  } catch (error) {
+    res.status(500).send("Internal Server Error");
+  }
+})
+
+
+const getAllTransactions = catchAsync(async (req, res, next) =>{
+  try {
+    const payments = await razorpay.payments.all({ from: "2024-01-01", to: "2024-12-31" });
+    return payments;
+  } catch (error) {
+    throw error;
+  }
+})
 
 module.exports = {
   createOrder,
-  verifyPayment,
+  verifyPayment, getTransactionHistory, getAllTransactions, getOrderHistory
 };
