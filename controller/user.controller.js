@@ -2,12 +2,14 @@ const catchAsync = require("../utils/catchAsync");
 require("dotenv").config();
 const dbConnection = require("../connections/dbConnection");
 const client = dbConnection.getClient();
+const { OAuth2Client } = require('google-auth-library');
+const oAuth = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const ApiResponse = require("../utils/apiResponse");
 const httpStatus = require("http-status");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const tokenService = require("../services/tokenService");
 const type = require("../config/tokentype");
+const jwt = require("jsonwebtoken")
 
 const add_productItem = catchAsync(async (req, res, next) => {
   try {
@@ -202,6 +204,73 @@ const loginUser = catchAsync(async (req, res, next) => {
   }
 });
 
+const continueWithGoogle = catchAsync(async (req, res, next) =>{
+ 
+  try {
+    const { credential } = req.body;
+
+     const ticket = await oAuth.verifyIdToken({   // Verify and decode the Google credential
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { email, name, picture, email_verified } = payload;
+    // console.log(email, name, picture,email_verified);
+
+     let user = await client.query(`SELECT * FROM users WHERE username = $1`, [email]);   // Check if the user already exists in the database
+ if (user.rows.length === 0) {
+   // If user doesn't exist, register the user
+   const insertQuery = `
+   INSERT INTO users (username, full_name, is_profile_complete)
+   VALUES ($1, $2, $3)
+   RETURNING *;
+ `;
+   const values = [email, name, false];
+   const result = await client.query(insertQuery, values);
+   user = result.rows[0];
+ } else {
+   user = user.rows[0];
+ }
+ const isProfileComplete = user.is_profile_complete;
+ const member = {
+  userId: user.user_id
+ }
+ if (!isProfileComplete) {
+  const appToken = await tokenService.generateUserTokens(member)
+  return res.status(httpStatus.OK).send({
+    success: true,
+    message: "Additional details required",
+    data: user,
+    token: appToken,
+    requireAdditionalDetails: true, // Indicate that more details are needed
+  });
+}
+ // Generate an application-specific token
+  const appToken = await tokenService.generateUserTokens(member)
+  return res.status(httpStatus.OK).send({success: true, message: "User logged in dashboard", data: user, token: appToken});
+  } catch (error) {
+    return ApiResponse(res, httpStatus.BAD_REQUEST, false, error.message, []);
+  }
+})
+
+const updateJoinDetails = catchAsync(async (req, res, next) =>{
+  const  { mobile, userId } = req.body;
+
+  try {
+    if (!mobile) {
+    return  ApiResponse(res, httpStatus.OK, false, "mobile number is required", []);
+    }
+    const result = await client.query(
+      `UPDATE users SET mobile = $1, is_profile_complete = $2 WHERE user_id = $3`,
+      [mobile, true, userId]
+    );
+    ApiResponse(res, httpStatus.OK, true, "update successfully", []);
+  } catch (error) {
+    ApiResponse(res, httpStatus.OK, false, "update failed", []);
+  }
+ 
+}) 
+
 const addAddress = catchAsync(async (req, res, next) => {
   try {
     const { userId, address, state, city, zipcode, mobileNumber, name } =
@@ -330,7 +399,7 @@ module.exports = {
   getCartData,
   updateOrderStatus,
   removeOrderFromCart,
-  addAddress,
+  addAddress, continueWithGoogle,
   updateShippingAddress,
-  getAddress,
+  getAddress, updateJoinDetails
 };

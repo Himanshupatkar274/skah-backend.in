@@ -4,11 +4,11 @@ const router = express.Router();
 const userController = require('../controller/user.controller');
 const paymentController = require('../middlewares/payment');
 const {upload} = require('../middlewares/multer');
-const { authentication } = require('../middlewares/authentication');
+const { authentication } = require('../middlewares/auth');
 // Define user routes
 
 router.post('/addProductItem', upload.single('image'), userController.add_productItem)
-router.get('/getAllProducts' , authentication(), userController.getAllProducts)
+router.get('/getAllProducts', userController.getAllProducts)
 router.get('/getproductById/:id', authentication(), userController.getproductById)
 router.post('/addToCart', authentication(), userController.addToCart)
 router.post('/removeCartItem/:id', authentication(), userController.removeCartItem)
@@ -25,5 +25,7 @@ router.post('/getOrderHistory', authentication(), paymentController.getOrderHist
 router.post('/getTransactionHistory', authentication(), paymentController.getTransactionHistory)
 router.post('/updateOrderStatus', authentication(), userController.updateOrderStatus)
 router.post('/removeOrderFromCart', authentication(), userController.removeOrderFromCart)
+router.post('/continueWithGoogle', userController.continueWithGoogle)
+router.post('/updateJoinDetails', userController.updateJoinDetails)
 
 module.exports = router;

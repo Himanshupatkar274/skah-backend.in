@@ -81,7 +81,18 @@ const generateUserTokens = async (member) => {
   };
 };
 
+const destroyToken = async (token) => {
+  const query = `DELETE FROM user_token WHERE token = $1;`;
+  const values = [token];
 
+  try {
+    const result = await client.query(query, values);
+    return { message: "Token destroyed successfully", success: true };
+  } catch (error) {
+    console.error("Error destroying token:", error);
+    return { message: "Failed to destroy token", success: false };
+  }
+};
 
 module.exports = {
     generateUserTokens, generateAuthToken
