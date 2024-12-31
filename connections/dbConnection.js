@@ -7,7 +7,7 @@ function getClient() {
     client = new Client({
       user: "postgres",
       host: "localhost",
-      database: "NewTestDB",
+      database: "himanshudb",
       password: "Himanshu@123",
       port: process.env.DBPORT || 5657,
     });

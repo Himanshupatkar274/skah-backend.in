@@ -9,12 +9,21 @@ const httpStatus = require("http-status");
 const bcrypt = require("bcryptjs");
 const tokenService = require("../services/tokenService");
 const type = require("../config/tokentype");
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const csv = require('fast-csv');
+const path = require('path');
+
 
 const add_productItem = catchAsync(async (req, res, next) => {
   try {
-    const filename = req.file.filename;
-    const fileUrl = `${process.env.BASE_URL}/uploads/${filename}`;
+    let fileUrl = null; // Default value if no file is uploaded
+    
+    if (req.file) {
+      const filename = req.file.filename;
+      fileUrl = `${process.env.BASE_URL}/uploads/${filename}`;
+    }
+
     const data = {
       title: req.body?.title,
       price: req.body?.price,
@@ -24,15 +33,23 @@ const add_productItem = catchAsync(async (req, res, next) => {
       ratingRate: req.body?.ratingRate,
       ratingCount: req.body?.ratingCount,
     };
+
     const insertQuery = `
       INSERT INTO productitem (title, price, description, category, image, ratingRate, ratingCount)
       VALUES ('${data.title}', '${data.price}', '${data.description}', '${data.category}', '${data.image}', '${data.ratingRate}', '${data.ratingCount}')
-      RETURNING *;`;
+      RETURNING *;
+    `;
+
     const result = await client.query(insertQuery);
-    ApiResponse(res, httpStatus.OK, true, "product add successfully");
+    
+    ApiResponse(res, httpStatus.OK, true, "Product added successfully", result.rows[0]);
   } catch (error) {
+    console.error("Error in add_productItem:", error); // Log the error for debugging
+    
+    return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, "Something went wrong", []);
   }
 });
+
 
 const getAllProducts = catchAsync(async (req, res, next) => {
   const getAllProducts = "SELECT * FROM productitem";
@@ -163,7 +180,7 @@ const joinUser = catchAsync(async (req, res, next) => {
         userId: result.rows[0].user_id
       };
       const Token = await tokenService.generateUserTokens(memberData)
-      res.status(httpStatus.OK).send({ success: true, message: "User created successfully", data: result.data[0], Token })
+      res.status(httpStatus.OK).send({ success: true, message: "User created successfully", data: result.rows[0], Token })
     }
 
   } catch (error) {
@@ -184,7 +201,7 @@ const loginUser = catchAsync(async (req, res, next) => {
       `SELECT * FROM users WHERE username = '${email}';`
     );
     if (user.rows.length === 0) {
-      return ApiResponse(res, httpStatus.NOT_FOUND, false, "User not found", []);
+      return ApiResponse(res, httpStatus.OK, false, "User not found", []);
     }
 
     const hashedPassword = user.rows[0].password;
@@ -197,7 +214,7 @@ const loginUser = catchAsync(async (req, res, next) => {
       const token = await tokenService.generateUserTokens(userData);
       return res.status(httpStatus.OK).send({ success: true, message: "User Login successfully", data: user.rows[0] , token })
     } else {
-      return ApiResponse(res, httpStatus.UNAUTHORIZED, false, "Incorrect password", []);
+      return ApiResponse(res, httpStatus.OK, false, "Incorrect password", []);
     }
   } catch (error) {
     return ApiResponse(res, httpStatus.BAD_REQUEST, false, error.message, []);
@@ -388,8 +405,53 @@ const removeOrderFromCart = catchAsync(async (req, res, next) => {
   }
 });
 
+const getZipData = catchAsync(async (req, res, next) =>{
+
+  try {
+    const pincode  = req.params.pincode;
+ 
+    if (!pincode) {
+      return ApiResponse(
+        res,
+        httpStatus.OK,
+        false,
+        "Pincode is required",
+        []
+      );
+    }
+    
+    const query = `SELECT * FROM pin_codes WHERE pincode = $1`
+    const result = await client.query(query, [pincode])
+
+    return ApiResponse( res,  httpStatus.OK, false, "Pincode get Success", result.rows[0]);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.OK, false, error.message, []);
+  }
+})
+
+
+const deleteAddressById = catchAsync(async (req, res, next) =>{
+
+  try {
+    const userId  = req.params.userId;
+    const id  = req.params.id;
+ 
+    if (!userId || !id) {
+      return ApiResponse( res, httpStatus.OK, false, "field is required", []);
+    }
+    
+    const query = `DELETE FROM user_addresses WHERE user_id = $1 AND id = $2`
+    const result = await client.query(query, [userId, id])
+
+    return ApiResponse( res,  httpStatus.OK, false, "Address delete Success", []);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.OK, false, error.message, []);
+  }
+})
+
+
 module.exports = {
-  add_productItem,
+  add_productItem, deleteAddressById,
   getAllProducts,
   getproductById,
   addToCart,
@@ -400,6 +462,6 @@ module.exports = {
   updateOrderStatus,
   removeOrderFromCart,
   addAddress, continueWithGoogle,
-  updateShippingAddress,
+  updateShippingAddress, getZipData,
   getAddress, updateJoinDetails
 };
