@@ -197,29 +197,45 @@ const joinUser = catchAsync(async (req, res, next) => {
 const loginUser = catchAsync(async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await client.query(
-      `SELECT * FROM users WHERE username = '${email}';`
+
+    const userResult = await client.query(
+      `SELECT * FROM users WHERE username = $1;`,
+      [email]
     );
-    if (user.rows.length === 0) {
+    const user = userResult.rows[0];
+
+    if (!user) {
       return ApiResponse(res, httpStatus.OK, false, "User not found", []);
     }
 
-    const hashedPassword = user.rows[0].password;
-    const passwordMatch = await bcrypt.compare(password, hashedPassword);
-
-    if (passwordMatch) {
-      const userData = {
-        userId: user.rows[0].user_id
-      }
-      const token = await tokenService.generateUserTokens(userData);
-      return res.status(httpStatus.OK).send({ success: true, message: "User Login successfully", data: user.rows[0] , token })
-    } else {
-      return ApiResponse(res, httpStatus.OK, false, "Incorrect password", []);
+    if (user.password === null) {
+      return ApiResponse(res, httpStatus.OK, true, "Continue with Google", [{ isPassword: false }]);
     }
+
+    if (!password) {
+      return ApiResponse(res, httpStatus.OK, true, "Password is required", [{ isPassword: true }]);
+    }
+
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+
+    if (isPasswordMatch) {
+      const userData = { userId: user.user_id };
+      const token = await tokenService.generateUserTokens(userData);
+
+      return res.status(httpStatus.OK).send({
+        success: true,
+        message: "User logged in successfully",
+        data: user,
+        token,
+      });
+    }
+
+    return ApiResponse(res, httpStatus.OK, false, "Incorrect password", []);
   } catch (error) {
     return ApiResponse(res, httpStatus.BAD_REQUEST, false, error.message, []);
   }
 });
+
 
 const continueWithGoogle = catchAsync(async (req, res, next) =>{
  
@@ -233,6 +249,7 @@ const continueWithGoogle = catchAsync(async (req, res, next) =>{
     const payload = ticket.getPayload();
     const { email, name, picture, email_verified } = payload;
     // console.log(email, name, picture,email_verified);
+console.log(payload);
 
      let user = await client.query(`SELECT * FROM users WHERE username = $1`, [email]);   // Check if the user already exists in the database
  if (user.rows.length === 0) {
@@ -252,7 +269,7 @@ const continueWithGoogle = catchAsync(async (req, res, next) =>{
  const member = {
   userId: user.user_id
  }
- if (!isProfileComplete) {
+ if (isProfileComplete) {
   const appToken = await tokenService.generateUserTokens(member)
   return res.status(httpStatus.OK).send({
     success: true,
@@ -279,7 +296,7 @@ const updateJoinDetails = catchAsync(async (req, res, next) =>{
     }
     const result = await client.query(
       `UPDATE users SET mobile = $1, is_profile_complete = $2 WHERE user_id = $3`,
-      [mobile, true, userId]
+      [`+91${mobile}`, true, userId]
     );
     ApiResponse(res, httpStatus.OK, true, "update successfully", []);
   } catch (error) {
@@ -357,7 +374,7 @@ const updateShippingAddress = catchAsync(async (req, res, next) => {
 
 const updateOrderStatus = catchAsync(async (req, res, next) => {
   try {
-    const { orderId, status } = req.body;
+    const { orderId, status, orderStatus } = req.body;
     if (!orderId) {
       return ApiResponse(
         res,
@@ -366,8 +383,8 @@ const updateOrderStatus = catchAsync(async (req, res, next) => {
         "orderId is required"
       );
     }
-    const query = `UPDATE user_orders SET status = $1 WHERE order_id = $2 RETURNING *;`;
-    const values = [status, orderId];
+    const query = `UPDATE user_orders SET status = $1, order_status = $2 WHERE order_id = $3 RETURNING *;`;
+    const values = [status, orderStatus, orderId ];
     const result = await client.query(query, values);
     if (result.rows.length === 0) {
       return ApiResponse(res, httpStatus.NOT_FOUND, false, "Order not found");
@@ -449,11 +466,61 @@ const deleteAddressById = catchAsync(async (req, res, next) =>{
   }
 })
 
+const saveShippingAddress = catchAsync(async (req, res, next) => {
+  try {
+    const { userId, name, mobile, address_line1, address_line2, city, state, pincode } = req.body;
+
+    if (!userId) {
+      return ApiResponse(res, httpStatus.OK, false, "UserId is required", []);
+    }
+
+    const query = `
+      INSERT INTO shipping_addresses (user_id, name, mobile_number, address_line1, address_line2, city, state, pincode)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET 
+        name = EXCLUDED.name,
+        mobile_number = EXCLUDED.mobile_number,
+        address_line1 = EXCLUDED.address_line1,
+        address_line2 = EXCLUDED.address_line2,
+        city = EXCLUDED.city,
+        state = EXCLUDED.state,
+        pincode = EXCLUDED.pincode,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *;
+    `;
+
+    const values = [userId, name, mobile, address_line1, address_line2, city, state, pincode];
+    const result = await client.query(query, values);
+
+    return ApiResponse(res, httpStatus.OK, true, "Address saved successfully", result.rows[0]);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, error.message, []);
+  }
+});
+
+
+const getShippingAddress = catchAsync(async (req, res, next) => {
+  try {
+    const userId = req.params.userId;
+
+    if (!userId) {
+      return ApiResponse(res, httpStatus.OK, false, "UserId is required", []);
+    }
+
+    const query = `SELECT * FROM shipping_addresses WHERE user_id = $1`;
+    const result = await client.query(query, [userId]);
+
+    return ApiResponse(res, httpStatus.OK, true, "Address get successfully", result.rows);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, error.message, []);
+  }
+});
 
 module.exports = {
   add_productItem, deleteAddressById,
-  getAllProducts,
-  getproductById,
+  getAllProducts, saveShippingAddress,
+  getproductById, getShippingAddress,
   addToCart,
   removeCartItem,
   joinUser,

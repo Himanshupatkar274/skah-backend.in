@@ -9,7 +9,7 @@ const { authentication } = require('../middlewares/auth');
 
 router.post('/addProductItem', upload.single('image'), userController.add_productItem)
 router.get('/getAllProducts', userController.getAllProducts)
-router.get('/getproductById/:id', userController.getproductById)
+router.get('/getproductById/:id', authentication(), userController.getproductById)
 router.post('/addToCart', authentication(), userController.addToCart)
 router.post('/joinUser', userController.joinUser)
 router.post('/loginUser', userController.loginUser)
@@ -27,6 +27,8 @@ router.post('/removeOrderFromCart', authentication(), userController.removeOrder
 router.post('/continueWithGoogle', userController.continueWithGoogle)
 router.post('/updateJoinDetails', userController.updateJoinDetails)
 router.get('/getZipData/:pincode',  authentication(), userController.getZipData)
+router.post('/saveShippingAddress',  authentication(), userController.saveShippingAddress)
+router.get('/getShippingAddress/:userId',  authentication(), userController.getShippingAddress)
 router.get('/deleteAddressById/:userId/:id',  authentication(), userController.deleteAddressById)
 
 module.exports = router;
