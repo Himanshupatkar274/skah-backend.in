@@ -169,7 +169,7 @@ const joinUser = catchAsync(async (req, res, next) => {
         []
       );
     }
-    const insertQuery = `INSERT INTO users (username, password, full_name, mobile) VALUES ('${req.body.email}', '${hashedPassword}', '${req.body.fullName}', '${req.body.mobile}') RETURNING *;`;
+    const insertQuery = `INSERT INTO users (username, password, full_name, mobile, is_profile_complete) VALUES ('${req.body.email}', '${hashedPassword}', '${req.body.fullName}', '${req.body.mobile}', '${req.body.isProfileComplete}') RETURNING *;`;
     const result = await client.query(insertQuery);
     if (result.rows) {
       const memberData = {
