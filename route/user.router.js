@@ -30,5 +30,6 @@ router.get('/getZipData/:pincode',  authentication(), userController.getZipData)
 router.post('/saveShippingAddress',  authentication(), userController.saveShippingAddress)
 router.get('/getShippingAddress/:userId',  authentication(), userController.getShippingAddress)
 router.get('/deleteAddressById/:userId/:id',  authentication(), userController.deleteAddressById)
+router.get('/getUserDetails/:userId',  authentication(), userController.getUserDetails)
 
 module.exports = router;

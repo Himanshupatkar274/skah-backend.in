@@ -249,17 +249,15 @@ const continueWithGoogle = catchAsync(async (req, res, next) =>{
     const payload = ticket.getPayload();
     const { email, name, picture, email_verified } = payload;
     // console.log(email, name, picture,email_verified);
-console.log(payload);
-
      let user = await client.query(`SELECT * FROM users WHERE username = $1`, [email]);   // Check if the user already exists in the database
  if (user.rows.length === 0) {
    // If user doesn't exist, register the user
    const insertQuery = `
-   INSERT INTO users (username, full_name, is_profile_complete)
-   VALUES ($1, $2, $3)
+   INSERT INTO users (username, full_name, is_profile_complete, image)
+   VALUES ($1, $2, $3, $4)
    RETURNING *;
  `;
-   const values = [email, name, false];
+   const values = [email, name, false, picture];
    const result = await client.query(insertQuery, values);
    user = result.rows[0];
  } else {
@@ -517,11 +515,31 @@ const getShippingAddress = catchAsync(async (req, res, next) => {
   }
 });
 
+const getUserDetails = catchAsync(async (req, res, next) => {
+  try {
+    const userId = req.params.userId;
+
+    if (!userId) {
+      return ApiResponse(res, httpStatus.OK, false, "UserId is required", []);
+    }
+
+    const query = `SELECT * FROM users WHERE user_id = $1`;
+    const result = await client.query(query, [userId]);
+    if (result.rows.length > 0) {
+      return ApiResponse(res, httpStatus.OK, true, "User get successfully", result.rows);
+    } else {
+      return ApiResponse(res, httpStatus.OK, false, "User Not Found");
+    }
+  } catch (error) {
+    return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, error.message, []);
+  }
+});
+
 module.exports = {
   add_productItem, deleteAddressById,
   getAllProducts, saveShippingAddress,
   getproductById, getShippingAddress,
-  addToCart,
+  addToCart, getUserDetails,
   removeCartItem,
   joinUser,
   loginUser,
