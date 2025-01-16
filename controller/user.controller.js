@@ -85,6 +85,7 @@ const addToCart = catchAsync(async (req, res, next) => {
       price: req.body.price,
       title: req.body.title,
       base_price: req.body.base_price,
+      image: req.body.image
     };
 
     const addProduct = `
@@ -95,6 +96,7 @@ const addToCart = catchAsync(async (req, res, next) => {
     v_quantity numeric := ${data.quantity};
     v_base_price numeric := ${data.base_price};
     v_title varchar := '${data.title}';
+    v_image text := '${data.image}';
           BEGIN
         IF EXISTS (SELECT 1 FROM cartitem WHERE user_id = v_user_id AND product_id = v_product_id) THEN
           UPDATE cartitem
@@ -102,8 +104,8 @@ const addToCart = catchAsync(async (req, res, next) => {
               price = (cartitem.quantity + v_quantity) * v_base_price
           WHERE user_id = v_user_id AND product_id = v_product_id;
         ELSE
-          INSERT INTO cartitem (user_id, product_id, quantity, price, title, base_price)
-          VALUES (v_user_id, v_product_id, v_quantity, v_quantity * v_base_price, v_title, v_base_price);
+          INSERT INTO cartitem (user_id, product_id, quantity, price, title, base_price, image)
+          VALUES (v_user_id, v_product_id, v_quantity, v_quantity * v_base_price, v_title, v_base_price, v_image);
         END IF;
       END$$;
 `;
@@ -169,7 +171,7 @@ const joinUser = catchAsync(async (req, res, next) => {
         []
       );
     }
-    const insertQuery = `INSERT INTO users (username, password, full_name, mobile, is_profile_complete) VALUES ('${req.body.email}', '${hashedPassword}', '${req.body.fullName}', '${req.body.mobile}', '${req.body.isProfileComplete}') RETURNING *;`;
+    const insertQuery = `INSERT INTO users (username, password, full_name, mobile, is_profile_complete) VALUES ('${req.body.email}', '${hashedPassword}', '+91${req.body.fullName}', '${req.body.mobile}', '${req.body.isProfileComplete}') RETURNING *;`;
     const result = await client.query(insertQuery);
     if (result.rows) {
       const memberData = {
@@ -636,11 +638,62 @@ const getAvatar = catchAsync(async (req, res, next) => {
   }
 });
 
+const saveOrderDetails = catchAsync(async (req, res, next) =>{
+     try {
+      const items = req.body; // Expecting an array of items
+      const query = `
+        INSERT INTO order_items (order_id, product_id, product_img, quantity, price)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *;
+      `;
+  
+      const results = [];
+      for (const item of items) {
+        const values = [
+          item.orderId, 
+          item.productId, 
+          item.productImg, 
+          item.quantity, 
+          item.price
+        ];
+        const result = await client.query(query, values);
+        results.push(result.rows[0]);
+      }
+
+        return ApiResponse(res, httpStatus.OK, true, "Order saved successfully", []);
+     } catch (error) {
+      return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, error.message, []);
+     }
+});
+
+const getOrderDetails = catchAsync(async (req, res, next) => {
+  try {
+    const orderId  = req.params.orderId;
+ 
+    if (!orderId) {
+      return ApiResponse(
+        res,
+        httpStatus.OK,
+        false,
+        "Order Id is required",
+        []
+      );
+    }
+    
+    const query = `SELECT * FROM order_items WHERE order_id = $1`
+    const result = await client.query(query, [orderId])
+
+    return ApiResponse( res,  httpStatus.OK, false, "Order get Success", result.rows);
+  } catch (error) {
+    return ApiResponse(res, httpStatus.OK, false, error.message, []);
+  }
+});
+
 module.exports = {
-  add_productItem, deleteAddressById, getAvatar, updateAvtar, 
+  add_productItem, deleteAddressById, getAvatar, updateAvtar, getOrderDetails, 
   getAllProducts, saveShippingAddress,
   getproductById, getShippingAddress, changesPassword, 
-  addToCart, getUserDetails, updateUserInfo, 
+  addToCart, getUserDetails, updateUserInfo, saveOrderDetails, 
   removeCartItem,
   joinUser,
   loginUser,
