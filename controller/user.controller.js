@@ -535,11 +535,112 @@ const getUserDetails = catchAsync(async (req, res, next) => {
   }
 });
 
+const changesPassword = catchAsync(async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, userId } = req.body;
+    const userResult = await client.query(
+      `SELECT * FROM users WHERE user_id = $1;`,
+      [userId]
+    );
+    const user = userResult.rows[0];
+    const salt = await bcrypt.genSalt(10);
+    const newHashedPassword = await bcrypt.hash(newPassword, salt);
+    const isPasswordMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isPasswordMatch) {
+      return ApiResponse(res, httpStatus.OK, false, "Password Update Failed");
+    }
+
+    const query = `UPDATE users SET password = $1 WHERE user_id = $2 RETURNING *;`;
+    const values = [ newHashedPassword, userId ];
+    const result = await client.query(query, values);
+    if (result.rows.length === 0) {
+      return ApiResponse(res, httpStatus.NOT_FOUND, false, "Password Update Failed");
+    }
+    ApiResponse( res,  httpStatus.OK, true,  "Password Change Successfully",  [] );
+
+  } catch (error) {
+    ApiResponse(res, httpStatus.OK, false, error.message);
+  }
+});
+
+const updateUserInfo = catchAsync(async (req, res, next) => {
+  try {
+    const {name,  mobile, address, userId } = req.body;
+    if (!userId) {
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "userId is required"
+      );
+    }
+    const query = `UPDATE users SET full_name = $1, mobile = $2, address = $3 WHERE user_id = $4 RETURNING *;`;
+    const values = [name, `+91${mobile}`, address, userId ];
+    const result = await client.query(query, values);
+    if (result.rows.length === 0) {
+      return ApiResponse(res, httpStatus.NOT_FOUND, false, "User not found");
+    }
+    ApiResponse(
+      res,
+      httpStatus.OK,
+      true,
+      "profile update successfully",
+      []
+    );
+  } catch (error) {
+    ApiResponse(res, httpStatus.OK, false, error.message);
+  }
+});
+
+const updateAvtar = catchAsync(async (req, res, next) => {
+  try {
+    const {avtarUrl, userId } = req.body;
+    if (!avtarUrl) {
+      return ApiResponse(
+        res,
+        httpStatus.BAD_REQUEST,
+        false,
+        "avatar is required"
+      );
+    }
+    const query = `UPDATE users SET image = $1 WHERE user_id = $2 RETURNING *;`;
+    const values = [avtarUrl, userId ];
+    const result = await client.query(query, values);
+    if (result.rows.length === 0) {
+      return ApiResponse(res, httpStatus.NOT_FOUND, false, "Avatar not found");
+    }
+    ApiResponse(
+      res,
+      httpStatus.OK,
+      true,
+      "Avatar update successfully",
+      []
+    );
+  } catch (error) {
+    ApiResponse(res, httpStatus.OK, false, error.message);
+  }
+});
+
+const getAvatar = catchAsync(async (req, res, next) => {
+  try {
+    const query = `SELECT * FROM user_avatar`;
+    const result = await client.query(query);
+    if (result.rows.length > 0) {
+      return ApiResponse(res, httpStatus.OK, true, "Avatar get successfully", result.rows);
+    } else {
+      return ApiResponse(res, httpStatus.OK, false, "Avatar Not Found");
+    }
+  } catch (error) {
+    return ApiResponse(res, httpStatus.INTERNAL_SERVER_ERROR, false, error.message, []);
+  }
+});
+
 module.exports = {
-  add_productItem, deleteAddressById,
+  add_productItem, deleteAddressById, getAvatar, updateAvtar, 
   getAllProducts, saveShippingAddress,
-  getproductById, getShippingAddress,
-  addToCart, getUserDetails,
+  getproductById, getShippingAddress, changesPassword, 
+  addToCart, getUserDetails, updateUserInfo, 
   removeCartItem,
   joinUser,
   loginUser,
