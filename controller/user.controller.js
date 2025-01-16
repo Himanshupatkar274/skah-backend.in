@@ -642,8 +642,8 @@ const saveOrderDetails = catchAsync(async (req, res, next) =>{
      try {
       const items = req.body; // Expecting an array of items
       const query = `
-        INSERT INTO order_items (order_id, product_id, product_img, quantity, price)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO order_items (order_id, product_id, product_img, quantity, price, product_title)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *;
       `;
   
@@ -654,7 +654,8 @@ const saveOrderDetails = catchAsync(async (req, res, next) =>{
           item.productId, 
           item.productImg, 
           item.quantity, 
-          item.price
+          item.price,
+          item.title
         ];
         const result = await client.query(query, values);
         results.push(result.rows[0]);
@@ -682,8 +683,10 @@ const getOrderDetails = catchAsync(async (req, res, next) => {
     
     const query = `SELECT * FROM order_items WHERE order_id = $1`
     const result = await client.query(query, [orderId])
-
-    return ApiResponse( res,  httpStatus.OK, false, "Order get Success", result.rows);
+    if (result.rows.length >0) {
+      return ApiResponse( res,  httpStatus.OK, true, "Order get Success", result.rows);
+    }
+    return ApiResponse( res,  httpStatus.OK, false, "Order Not Found", []);
   } catch (error) {
     return ApiResponse(res, httpStatus.OK, false, error.message, []);
   }
